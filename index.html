@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study Master V3.9 - 穩定與分層版</title>
+    <title>Study Master V3.9 - 穩定修復版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -13,10 +13,9 @@
         .wrong { background-color: #fee2e2 !important; border-color: #ef4444 !important; color: #991b1b; }
         .sidebar-item:hover { background-color: #334155; }
         .passage-box { background-color: #f8fafc; border-left: 6px solid #3b82f6; padding: 1.5rem; margin-bottom: 2rem; border-radius: 1rem; line-height: 1.8; color: #1e293b; white-space: pre-wrap; font-size: 1.05rem; }
-        .rationale-content { white-space: pre-wrap; line-height: 1.7; }
+        .rationale-content { white-space: pre-wrap; line-height: 1.7; word-break: break-all; }
         #sidebar { transition: transform 0.3s ease-in-out; }
         .sidebar-open { transform: translateX(0) !important; }
-        .view-active { display: flex !important; }
         .nav-btn-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
     </style>
 </head>
@@ -39,6 +38,7 @@
                 <input type="password" id="sync-key" class="flex-1 bg-slate-900 border-none rounded-xl p-2.5 text-xs text-white outline-none focus:ring-1 focus:ring-blue-500" placeholder="金鑰...">
                 <button onclick="initSync()" class="bg-blue-600 px-4 py-2 rounded-xl text-xs font-bold text-white">連線</button>
             </div>
+            <p id="sync-status" class="text-[10px] mt-2 text-slate-500 italic">尚未連線雲端</p>
         </div>
 
         <div id="quiz-list" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
@@ -61,50 +61,46 @@
         </header>
 
         <div id="main-content" class="flex-1 overflow-y-auto p-4 md:p-12 flex flex-col items-center">
-            
-            <div id="view-study" class="view-active w-full max-w-4xl flex-col hidden">
+            <div id="view-study" class="w-full max-w-4xl flex flex-col">
                 <div id="quiz-stats" class="hidden flex justify-between w-full mb-6">
                     <span id="timer" class="font-mono text-blue-600 bg-blue-50 px-4 py-1 rounded-full font-bold">00:00</span>
                     <span id="progress" class="text-slate-400 font-bold text-sm">0 / 0</span>
                 </div>
                 <div id="quiz-screen" class="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100 hidden">
                     <div id="passage-display" class="passage-box hidden"></div>
-                    <div id="question-text" class="text-2xl font-bold text-slate-800 leading-snug mb-10 whitespace-pre-line"></div>
+                    <div id="question-text" class="text-2xl font-bold text-slate-900 leading-snug mb-10 whitespace-pre-line"></div>
                     <div id="options-container" class="space-y-4"></div>
                     <button id="next-btn" onclick="nextQuestion()" class="hidden mt-12 w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl">下一題</button>
                 </div>
-                <div id="result-screen" class="hidden w-full space-y-10"></div>
+                <div id="result-screen" class="hidden w-full space-y-10 pb-20">
+                    <div class="bg-white p-12 rounded-[3rem] shadow-xl text-center border border-slate-100">
+                        <h3 class="text-4xl font-black mb-10">測驗報告</h3>
+                        <div class="flex justify-center gap-8 mb-10">
+                            <div class="w-40 p-8 bg-blue-50 rounded-[2rem]"><p class="text-xs text-blue-400 font-bold mb-1">正確率</p><p id="final-score" class="text-4xl font-black text-blue-700">0%</p></div>
+                            <div class="w-40 p-8 bg-slate-50 rounded-[2rem]"><p class="text-xs text-slate-400 font-bold mb-1">耗時</p><p id="final-time" class="text-4xl font-black text-slate-700">0s</p></div>
+                        </div>
+                        <button onclick="switchView('creator')" class="px-12 py-4 bg-slate-900 text-white rounded-full font-bold">返回匯入</button>
+                    </div>
+                    <div id="review-container" class="space-y-8"></div>
+                </div>
                 <div id="welcome-screen" class="text-center py-20">
-                    <h2 class="text-4xl font-black text-slate-900 mb-4">準備好開始了嗎？</h2>
-                    <p class="text-slate-400">請從左側選單選擇一個題組進入學習模式。</p>
+                    <h2 class="text-4xl font-black text-slate-900 mb-4">今天想練習什麼？</h2>
+                    <p class="text-slate-400 italic">請從左側選單選擇題組，或到「工作室」新增素材。</p>
                 </div>
             </div>
 
             <div id="view-creator" class="w-full max-w-4xl flex-col hidden">
                 <div class="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100">
-                    <div class="flex justify-between items-end mb-8">
-                        <div>
-                            <h2 class="text-3xl font-black text-slate-900">創作者工作室</h2>
-                            <p class="text-slate-400">在這裡管理您的素材與 AI 出題</p>
-                        </div>
-                        <span class="text-[10px] bg-slate-100 px-3 py-1 rounded-full font-bold uppercase tracking-widest text-slate-400">Admin Mode</span>
-                    </div>
-                    
+                    <h2 class="text-3xl font-black text-slate-900 mb-8 text-center">創作者工作室</h2>
                     <input type="text" id="new-quiz-name" class="w-full p-5 bg-slate-50 rounded-2xl mb-4 border-none outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="設定題庫標題...">
-                    <textarea id="import-input" class="w-full h-80 p-6 bg-slate-50 rounded-2xl font-mono text-sm mb-6 border-none outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="貼上文字內容..."></textarea>
-                    
-                    <div class="flex gap-4">
-                        <button onclick="handleImport()" class="flex-1 bg-slate-900 text-white py-5 rounded-2xl font-black text-lg hover:bg-black transition-all">手動匯入並同步</button>
-                        <button class="bg-blue-100 text-blue-600 px-8 py-5 rounded-2xl font-black text-lg opacity-50 cursor-not-allowed">Gemini AI 出題 (開發中)</button>
-                    </div>
+                    <textarea id="import-input" class="w-full h-80 p-6 bg-slate-50 rounded-2xl font-mono text-sm mb-6 border-none outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="貼上包含【文本】、題目、答案與解析的內容..."></textarea>
+                    <button onclick="handleImport()" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl">儲存並同步至雲端</button>
                 </div>
             </div>
-
         </div>
     </main>
 
     <script>
-        // --- Firebase Config (請保持使用您之前的設定) ---
         const firebaseConfig = {
             apiKey: "AIzaSyD719pOpRDq9gfn8MpRsKILmYY8d0y-3n4",
             authDomain: "learning-41290.firebaseapp.com",
@@ -117,17 +113,24 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 離線持久化補丁 (穩定性關鍵)
-        firebase.firestore().enablePersistence().catch(err => console.log("Persistence failed", err.code));
+        // 啟動離線快取
+        db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+        firebase.firestore().enablePersistence().catch(err => console.error("Persistence failed", err));
 
         let allQuizzes = [];
+        let currentQuizData = [];
+        let currentIndex = 0;
+        let score = 0;
+        let startTime, timerInterval;
+        let userResponses = [];
         let syncKey = localStorage.getItem('master_sync_key') || '';
-        if(syncKey) { document.getElementById('sync-key').value = syncKey; }
 
-        // --- 前後台切換邏輯 ---
+        // 切換視圖
         function switchView(view) {
-            document.querySelectorAll('#main-content > div').forEach(v => v.classList.add('hidden'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-btn-active'));
+            document.getElementById('view-study').classList.add('hidden');
+            document.getElementById('view-creator').classList.add('hidden');
+            document.getElementById('nav-study').classList.remove('nav-btn-active');
+            document.getElementById('nav-creator').classList.remove('nav-btn-active');
             
             if (view === 'study') {
                 document.getElementById('view-study').classList.remove('hidden');
@@ -138,65 +141,172 @@
             }
         }
 
-        // --- 同步邏輯 (增加自動重連) ---
+        // 同步金鑰連線
         async function initSync() {
             const key = document.getElementById('sync-key').value.trim();
-            if (!key) return;
+            if (!key) return alert("請輸入同步金鑰");
             syncKey = key;
             localStorage.setItem('master_sync_key', key);
-            
-            document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse";
-            
-            try {
-                // 使用 onSnapshot 實現即時監聽 (比之前更穩)
-                db.collection("users").doc(syncKey).onSnapshot((doc) => {
-                    if (doc.exists) {
-                        allQuizzes = doc.data().quizzes || [];
-                        renderList();
-                        document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-emerald-500";
-                    } else {
-                        db.collection("users").doc(syncKey).set({ quizzes: [] });
-                        document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-emerald-500";
-                    }
-                }, err => {
-                    document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-red-500";
-                });
-            } catch (e) { console.error(e); }
+            document.getElementById('sync-status').innerText = "⏳ 正在同步...";
+
+            db.collection("users").doc(syncKey).onSnapshot((doc) => {
+                if (doc.exists) {
+                    allQuizzes = doc.data().quizzes || [];
+                    document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-emerald-500";
+                    document.getElementById('sync-status').innerText = "✅ 同步成功";
+                    renderList();
+                } else {
+                    db.collection("users").doc(syncKey).set({ quizzes: [] });
+                }
+            }, err => {
+                document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-red-500";
+                document.getElementById('sync-status').innerText = "❌ 連線失敗";
+            });
         }
 
-        // --- 核心解析與測驗邏輯 (延續 V3.8 的高品質解析) ---
+        // 渲染列表
         function renderList() {
             const list = document.getElementById('quiz-list');
             list.innerHTML = '';
             allQuizzes.forEach((q, idx) => {
                 const item = document.createElement('div');
-                item.className = "sidebar-item p-4 rounded-2xl cursor-pointer text-sm font-bold transition flex justify-between group items-center bg-slate-800/50";
-                item.innerHTML = `<span class="truncate pr-2 text-slate-400 group-hover:text-white">${q.name}</span><button onclick="deleteQuiz(event, ${idx})" class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400">✕</button>`;
-                item.onclick = () => { 
-                    loadQuiz(idx); 
-                    switchView('study'); // 點選題目自動跳轉到學習空間
-                    if(window.innerWidth < 768) toggleSidebar(); 
-                };
+                item.className = "sidebar-item p-4 rounded-xl cursor-pointer text-sm font-bold transition flex justify-between group items-center bg-slate-800/50 mb-2";
+                item.innerHTML = `<span class="truncate pr-2">${q.name}</span><button onclick="deleteQuiz(event, ${idx})" class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400">✕</button>`;
+                item.onclick = () => { loadQuiz(idx); toggleSidebar(); };
                 list.appendChild(item);
             });
         }
 
-        async function handleImport() {
-            const name = document.getElementById('new-quiz-name').value || `題組 ${new Date().toLocaleDateString()}`;
-            const parsed = smartParse(document.getElementById('import-input').value); // 此函數同 V3.8
-            if (parsed.length === 0) return alert("解析失敗！");
-            
-            allQuizzes.push({ name, data: parsed });
-            await db.collection("users").doc(syncKey).set({ quizzes: allQuizzes });
-            alert("題組已同步至雲端工作室！");
-            document.getElementById('new-quiz-name').value = "";
-            document.getElementById('import-input').value = "";
+        // 載入題組
+        function loadQuiz(idx) {
+            currentQuizData = allQuizzes[idx].data;
+            currentIndex = 0; score = 0; userResponses = [];
+            document.getElementById('welcome-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            document.getElementById('quiz-stats').classList.remove('hidden');
+            document.getElementById('current-title').innerText = allQuizzes[idx].name;
+            switchView('study');
+            startTime = Date.now();
+            clearInterval(timerInterval);
+            startTimer();
+            showQuestion();
         }
 
-        // [smartParse, loadQuiz, nextQuestion, showResult 等函數皆同 V3.8, 此處為簡潔略過，請合併使用]
-        // ... (保持 V3.8 的完整解析函數邏輯) ...
-        
-        if(syncKey) initSync(); // 初始化自動連線
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('timer').innerText = `${Math.floor(elapsed/60).toString().padStart(2,'0')}:${(elapsed%60).toString().padStart(2,'0')}`;
+            }, 1000);
+        }
+
+        function showQuestion() {
+            const q = currentQuizData[currentIndex];
+            document.getElementById('progress').innerText = `${currentIndex + 1} / ${currentQuizData.length}`;
+            const pBox = document.getElementById('passage-display');
+            if (q.passage) { pBox.innerText = q.passage; pBox.classList.remove('hidden'); } else { pBox.classList.add('hidden'); }
+            document.getElementById('question-text').innerText = q.q;
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "option-btn w-full text-left p-6 border-2 border-slate-100 rounded-2xl font-bold bg-white flex items-center";
+                btn.innerHTML = `<span class="w-8 h-8 mr-4 bg-slate-50 text-center leading-8 rounded-lg text-xs font-black text-slate-400">${String.fromCharCode(65+idx)}</span> ${opt}`;
+                btn.onclick = () => checkAnswer(idx, btn);
+                container.appendChild(btn);
+            });
+            document.getElementById('next-btn').classList.add('hidden');
+        }
+
+        function checkAnswer(idx, btn) {
+            const q = currentQuizData[currentIndex];
+            userResponses.push(idx);
+            const allBtns = document.querySelectorAll('.option-btn');
+            allBtns.forEach(b => b.onclick = null);
+            if (idx === q.ans) { btn.classList.add('correct'); score++; } else { btn.classList.add('wrong'); allBtns[q.ans].classList.add('correct'); }
+            document.getElementById('next-btn').classList.remove('hidden');
+        }
+
+        function nextQuestion() {
+            currentIndex++;
+            if (currentIndex < currentQuizData.length) showQuestion(); else showResult();
+        }
+
+        function showResult() {
+            clearInterval(timerInterval);
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = `${Math.round((score / currentQuizData.length) * 100)}%`;
+            document.getElementById('final-time').innerText = `${Math.floor((Date.now() - startTime) / 1000)}s`;
+            const container = document.getElementById('review-container'); container.innerHTML = '';
+            currentQuizData.forEach((q, i) => {
+                const isCorrect = userResponses[i] === q.ans;
+                const div = document.createElement('div');
+                div.className = "bg-white p-8 md:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 mb-8";
+                div.innerHTML = `
+                    <div class="mb-4 text-xs font-black ${isCorrect ? 'text-emerald-500' : 'text-rose-500'} uppercase">${isCorrect ? '✓ Correct' : '✗ Incorrect'}</div>
+                    <div class="font-bold text-xl mb-6">Q${i+1}. ${q.q}</div>
+                    <div class="text-sm space-y-3 mb-8">
+                        ${q.options.map((o, idx) => `<div class="p-3 rounded-xl ${idx === q.ans ? 'bg-emerald-50 text-emerald-700 font-bold' : (idx === userResponses[i] ? 'bg-rose-50 text-rose-700 font-bold' : 'bg-slate-50')}">${String.fromCharCode(65+idx)}. ${o}</div>`).join('')}
+                    </div>
+                    <div class="p-6 bg-slate-900 text-slate-300 rounded-2xl text-sm leading-relaxed"><b class="text-blue-400 block mb-2">MASTER RATIONALE</b><div class="rationale-content">${q.rationale}</div></div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function smartParse(text) {
+            const lines = text.split('\n');
+            let questions = []; let activePassage = ""; let currentQ = null; let currentMode = "";
+            lines.forEach(line => {
+                const l = line.trim();
+                if (!l && currentMode !== "PASSAGE" && currentMode !== "RATIONALE") return;
+                if (l.includes('【文本】')) { currentMode = "PASSAGE"; activePassage = line.replace('【文本】', '').trim(); return; }
+                if (l.match(/^(Q\d+|[0-9]+)[\.\:：]/)) {
+                    currentMode = "QUESTION"; if (currentQ) questions.push(currentQ);
+                    currentQ = { passage: activePassage, q: l, options: [], ans: 0, rationale: "" }; return;
+                }
+                if (l.match(/^答案[:：]/)) { currentMode = "ANSWER"; const ans = l.match(/[A-D]/i); if (currentQ && ans) currentQ.ans = ans[0].toUpperCase().charCodeAt(0) - 65; return; }
+                if (l.match(/^解析[:：]/)) { currentMode = "RATIONALE"; if (currentQ) currentQ.rationale = l.replace(/^解析[:：]/, '').trim(); return; }
+                if (currentMode !== "RATIONALE" && l.match(/^\([A-D]\)/)) {
+                    currentMode = "OPTIONS"; const opts = l.match(/\([A-D]\)[^(\n]+/g).map(o => o.replace(/\([A-D]\)/, '').trim()); if (currentQ) currentQ.options.push(...opts); return;
+                }
+                if (currentMode === "PASSAGE") activePassage += (activePassage ? "\n" : "") + line;
+                else if (currentMode === "QUESTION" && currentQ) currentQ.q += "\n" + line;
+                else if (currentMode === "RATIONALE" && currentQ) currentQ.rationale += (currentQ.rationale ? "\n" : "") + line;
+            });
+            if (currentQ) questions.push(currentQ);
+            return questions;
+        }
+
+        async function handleImport() {
+            const name = document.getElementById('new-quiz-name').value || `題組 ${new Date().toLocaleDateString()}`;
+            const parsed = smartParse(document.getElementById('import-input').value);
+            if (!syncKey) return alert("請先在左側輸入同步金鑰並連線！");
+            if (parsed.length === 0) return alert("解析失敗，請檢查格式");
+            allQuizzes.push({ name, data: parsed });
+            await db.collection("users").doc(syncKey).set({ quizzes: allQuizzes });
+            alert("題組已同步至雲端！");
+            switchView('study');
+        }
+
+        async function deleteQuiz(e, idx) {
+            e.stopPropagation();
+            if(confirm("確定刪除？")) {
+                allQuizzes.splice(idx, 1);
+                await db.collection("users").doc(syncKey).set({ quizzes: allQuizzes });
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.toggle('sidebar-open');
+            overlay.classList.toggle('hidden');
+            setTimeout(() => overlay.classList.toggle('opacity-100'), 10);
+        }
+
+        if(syncKey) initSync();
     </script>
 </body>
 </html>
