@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study Master - 學習空間 (v3.9.2)</title>
+    <title>Study Master - 學習空間 (v4.0)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -12,12 +12,11 @@
         .correct { background-color: #d1fae5 !important; border-color: #10b981 !important; color: #065f46; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1); }
         .wrong { background-color: #fee2e2 !important; border-color: #ef4444 !important; color: #991b1b; }
         .sidebar-item:hover { background-color: #334155; }
-        .passage-box { background-color: #f8fafc; border-left: 6px solid #3b82f6; padding: 1.5rem; margin-bottom: 2rem; border-radius: 1rem; line-height: 1.8; color: #1e293b; white-space: pre-wrap; font-size: 1.05rem; }
+        .passage-box { background-color: #f8fafc; border-left: 6px solid #3b82f6; padding: 1.5rem; margin-bottom: 2rem; border-radius: 1rem; line-height: 1.8; color: #1e293b; white-space: pre-wrap; font-size: 1.05rem; transition: max-height 0.3s ease-out; overflow: hidden; }
+        .passage-collapsed { max-height: 100px; mask-image: linear-gradient(to bottom, black 50%, transparent 100%); }
         .rationale-content { white-space: pre-wrap; line-height: 1.7; word-break: break-all; }
         #sidebar { transition: transform 0.3s ease-in-out; }
         .sidebar-open { transform: translateX(0) !important; }
-        
-        /* 選取文字時的高亮顏色，讓查字更清楚 */
         ::selection { background: #3b82f6; color: white; }
     </style>
 </head>
@@ -36,9 +35,18 @@
             </div>
             <p id="sync-status" class="text-[10px] mt-2 text-slate-500 italic">尚未連線雲端</p>
         </div>
+        
+        <div class="px-4 mb-2">
+            <div onclick="loadMistakes()" class="p-4 rounded-xl cursor-pointer font-bold transition bg-rose-900/30 text-rose-400 border border-rose-500/20 hover:bg-rose-900/50 flex items-center justify-between">
+                <span>💀 錯題地牢</span>
+                <span id="mistake-count" class="text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full">0</span>
+            </div>
+        </div>
+
         <div id="quiz-list" class="flex-1 overflow-y-auto p-4 space-y-2 text-sm"></div>
         <div class="mt-auto p-6 border-t border-white/5"><a href="studio.html" class="block w-full p-4 bg-slate-800 text-center text-slate-400 rounded-2xl font-bold text-sm hover:text-white transition">進入工作室 →</a></div>
     </aside>
+
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
         <header class="bg-white/90 backdrop-blur-md border-b border-slate-200 p-5 md:p-6 flex justify-between items-center z-10 shadow-sm">
             <div class="flex items-center gap-4">
@@ -51,24 +59,40 @@
             </div>
         </header>
         <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-12 flex flex-col items-center">
-            <div id="quiz-screen" class="hidden w-full max-w-4xl bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100">
-                <div id="passage-display" class="passage-box hidden"></div>
-                <p class="text-[10px] text-slate-400 mb-2 text-right font-mono">Tip: 雙擊單字可查字典 (Merriam-Webster)</p>
+            <div id="quiz-screen" class="hidden w-full max-w-4xl bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100 relative">
+                
+                <div id="passage-container" class="relative hidden mb-8">
+                    <div id="passage-display" class="passage-box passage-collapsed"></div>
+                    <button onclick="togglePassage()" id="passage-toggle" class="absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-slate-100 to-transparent text-center text-xs font-bold text-blue-500 uppercase tracking-widest hover:text-blue-700">
+                        ↓ 展開閱讀
+                    </button>
+                </div>
+
+                <p class="text-[10px] text-slate-400 mb-2 text-right font-mono">Tip: 雙擊單字可查字典</p>
                 <div id="question-text" class="text-2xl font-bold text-slate-900 leading-snug mb-10 whitespace-pre-line"></div>
                 <div id="options-container" class="space-y-4"></div>
                 <button id="next-btn" onclick="nextQuestion()" class="hidden mt-12 w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl">下一題</button>
             </div>
+
             <div id="result-screen" class="hidden w-full max-w-5xl space-y-10 pb-20">
-                <div class="bg-white p-12 rounded-[3rem] shadow-xl text-center border border-slate-100"><h3 class="text-4xl font-black mb-8">測驗分析</h3>
+                <div class="bg-white p-12 rounded-[3rem] shadow-xl text-center border border-slate-100">
+                    <h3 class="text-4xl font-black mb-8">測驗分析</h3>
                     <div class="flex justify-center gap-8 mb-10">
                         <div class="w-40 p-8 bg-blue-50 rounded-3xl"><p class="text-xs text-blue-400 font-bold mb-1 uppercase">Score</p><p id="final-score" class="text-4xl font-black text-blue-700">0%</p></div>
                         <div class="w-40 p-8 bg-slate-50 rounded-3xl"><p class="text-xs text-slate-400 font-bold mb-1 uppercase">Time</p><p id="final-time" class="text-4xl font-black text-slate-700">0s</p></div>
+                    </div>
+                    <div id="mistake-alert" class="hidden p-4 bg-rose-50 text-rose-600 font-bold rounded-xl mb-6 border border-rose-200">
+                        ⚠️ 已將錯誤題目加入「錯題地牢」，請至側邊欄複習！
                     </div>
                     <button onclick="location.reload()" class="px-12 py-4 bg-slate-900 text-white rounded-full font-bold">重新選擇題組</button>
                 </div>
                 <div id="review-container" class="space-y-8 text-left"></div>
             </div>
-            <div id="welcome-screen" class="text-center py-20"><h2 class="text-4xl font-black text-slate-900 mb-4 tracking-tighter">STUDY SPACE</h2><p class="text-slate-400 italic">請從側邊欄連線金鑰並選擇練習內容。</p></div>
+            
+            <div id="welcome-screen" class="text-center py-20">
+                <h2 class="text-4xl font-black text-slate-900 mb-4 tracking-tighter">STUDY SPACE</h2>
+                <p class="text-slate-400 italic">請從側邊欄選擇題組，或挑戰「錯題地牢」。</p>
+            </div>
         </div>
     </main>
 
@@ -76,40 +100,27 @@
         const firebaseConfig = { apiKey: "AIzaSyD719pOpRDq9gfn8MpRsKILmYY8d0y-3n4", authDomain: "learning-41290.firebaseapp.com", projectId: "learning-41290", storageBucket: "learning-41290.firebasestorage.app", messagingSenderId: "451785140537", appId: "1:451785140537:web:668bc05ffa6fe68a51e0e8" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        
-        // --- 修正 Firebase 連線衝突 ---
         db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED, merge: true });
-        db.enablePersistence({ synchronizeTabs: true })
-            .catch((err) => { console.warn('Persistence failed:', err.code); });
+        db.enablePersistence({ synchronizeTabs: true }).catch(err => console.warn(err));
 
         let allQuizzes = [], currentQuizData = [], currentIndex = 0, score = 0, startTime, timerInterval, userResponses = [];
+        let mistakes = []; // 錯題暫存 (LocalStorage)
         let syncKey = localStorage.getItem('master_sync_key') || '';
+        
+        // 初始化錯題本
+        try { mistakes = JSON.parse(localStorage.getItem('master_mistakes')) || []; } catch(e) { mistakes = []; }
+        updateMistakeCount();
+
         if(syncKey) { document.getElementById('sync-key').value = syncKey; initSync(); }
 
-        // --- FEATURE: 雙擊查字 Merriam-Webster Integration (修復版) ---
         document.addEventListener('dblclick', function(e) {
-            let selection = window.getSelection().toString();
-            
-            // 1. 強力過濾：只保留英文字母、連字號和單引號 (去除逗號、句號等)
-            // 例如 "apple," 會變成 "apple"
-            selection = selection.replace(/[^a-zA-Z\-' ]/g, '').trim();
-
-            // 2. 檢查長度：太短的字(如 "a")不查，避免誤觸
+            let selection = window.getSelection().toString().replace(/[^a-zA-Z\-' ]/g, '').trim();
             if (selection && selection.length > 1) {
-                // 3. URL 編碼：處理特殊字元
                 const url = `https://www.merriam-webster.com/dictionary/${encodeURIComponent(selection)}`;
-                
-                const width = 450;
-                const height = 600;
-                const left = window.screen.width - width - 50; 
-                const top = window.screen.height - height - 100;
-                
-                // 4. 開啟視窗並檢查是否被封鎖
-                const newWin = window.open(url, 'DictionaryLookup', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`);
-                
-                if(!newWin || newWin.closed || typeof newWin.closed=='undefined') {
-                    alert('⚠️ 彈跳視窗被瀏覽器封鎖了！請點擊網址列的圖示，允許本網站開啟視窗，才能使用字典功能。');
-                }
+                const w = 450, h = 600;
+                const left = window.screen.width - w - 50; 
+                const top = window.screen.height - h - 100;
+                window.open(url, 'DictionaryLookup', `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,resizable=yes`);
             }
         });
 
@@ -118,7 +129,17 @@
             if (!key) return; syncKey = key; localStorage.setItem('master_sync_key', key);
             document.getElementById('sync-status').innerText = "⏳ 正在同步...";
             db.collection("users").doc(syncKey).onSnapshot((doc) => {
-                if (doc.exists) { allQuizzes = doc.data().quizzes || []; renderList(); document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-emerald-500"; document.getElementById('sync-status').innerText = "✅ 同步成功"; }
+                if (doc.exists) { 
+                    allQuizzes = doc.data().quizzes || []; 
+                    
+                    // 同步雲端錯題 (如果有的話，這裡做簡單合併)
+                    const cloudMistakes = doc.data().mistakes || [];
+                    // 簡單合併邏輯：這裡暫時以本地為主，實際應用可做更複雜同步
+                    
+                    renderList(); 
+                    document.getElementById('sync-indicator').className = "w-2 h-2 rounded-full bg-emerald-500"; 
+                    document.getElementById('sync-status').innerText = "✅ 同步成功"; 
+                }
                 else { document.getElementById('sync-status').innerText = "❌ 找不到雲端資料"; }
             });
         }
@@ -135,12 +156,23 @@
         }
 
         function loadQuiz(idx) {
-            currentQuizData = allQuizzes[idx].data; currentIndex = 0; score = 0; userResponses = [];
+            currentQuizData = allQuizzes[idx].data;
+            startQuizCommon(allQuizzes[idx].name);
+        }
+
+        function loadMistakes() {
+            if (mistakes.length === 0) return alert("目前沒有錯題！去做些題目再來吧。");
+            currentQuizData = mistakes; // 載入錯題作為本次測驗
+            startQuizCommon("💀 錯題地牢 (Review Mode)");
+        }
+
+        function startQuizCommon(title) {
+            currentIndex = 0; score = 0; userResponses = [];
             document.getElementById('welcome-screen').classList.add('hidden');
             document.getElementById('quiz-screen').classList.remove('hidden');
             document.getElementById('result-screen').classList.add('hidden');
             document.getElementById('quiz-stats').classList.remove('hidden');
-            document.getElementById('current-title').innerText = allQuizzes[idx].name;
+            document.getElementById('current-title').innerText = title;
             startTime = Date.now(); clearInterval(timerInterval); startTimer(); showQuestion();
         }
 
@@ -149,33 +181,105 @@
         function showQuestion() {
             const q = currentQuizData[currentIndex];
             document.getElementById('progress').innerText = `${currentIndex + 1} / ${currentQuizData.length}`;
+            
+            const pContainer = document.getElementById('passage-container');
             const pBox = document.getElementById('passage-display');
-            if (q.passage) { pBox.innerText = q.passage; pBox.classList.remove('hidden'); } else { pBox.classList.add('hidden'); }
+            
+            if (q.passage) { 
+                pBox.innerText = q.passage; 
+                pContainer.classList.remove('hidden'); 
+                // 預設摺疊
+                pBox.classList.add('passage-collapsed');
+                document.getElementById('passage-toggle').innerText = "↓ 展開閱讀";
+            } else { 
+                pContainer.classList.add('hidden'); 
+            }
+            
             document.getElementById('question-text').innerText = q.q;
             const container = document.getElementById('options-container'); container.innerHTML = '';
             q.options.forEach((opt, idx) => {
                 const btn = document.createElement('button');
                 btn.className = "option-btn w-full text-left p-6 border-2 border-slate-100 rounded-2xl font-bold bg-white flex items-center shadow-sm transition-all";
-                // 修正選項顯示：如果內容為空，顯示佔位符
                 btn.innerHTML = `<span class="w-8 h-8 mr-4 bg-slate-50 text-center leading-8 rounded-lg text-xs font-black text-slate-400">${String.fromCharCode(65+idx)}</span> ${opt || '(選項)'}`;
                 btn.onclick = () => checkAnswer(idx, btn); container.appendChild(btn);
             });
             document.getElementById('next-btn').classList.add('hidden');
         }
 
+        function togglePassage() {
+            const pBox = document.getElementById('passage-display');
+            const btn = document.getElementById('passage-toggle');
+            if (pBox.classList.contains('passage-collapsed')) {
+                pBox.classList.remove('passage-collapsed');
+                btn.innerText = "↑ 收合文章";
+            } else {
+                pBox.classList.add('passage-collapsed');
+                btn.innerText = "↓ 展開閱讀";
+            }
+        }
+
         function checkAnswer(idx, btn) {
             const q = currentQuizData[currentIndex]; userResponses.push(idx);
             document.querySelectorAll('.option-btn').forEach(b => b.onclick = null);
-            if (idx === q.ans) { btn.classList.add('correct'); score++; } else { btn.classList.add('wrong'); document.querySelectorAll('.option-btn')[q.ans].classList.add('correct'); }
+            
+            if (idx === q.ans) { 
+                btn.classList.add('correct'); 
+                score++; 
+                // 如果答對了，檢查是否在錯題本中，若是則移除 (Leitner 邏輯: 答對移出)
+                removeFromMistakes(q);
+            } else { 
+                btn.classList.add('wrong'); 
+                document.querySelectorAll('.option-btn')[q.ans].classList.add('correct');
+                // 答錯，加入錯題本
+                addToMistakes(q);
+            }
             document.getElementById('next-btn').classList.remove('hidden');
+        }
+
+        function addToMistakes(question) {
+            // 檢查是否已存在 (避免重複)
+            const exists = mistakes.some(m => m.q === question.q);
+            if (!exists) {
+                mistakes.push(question);
+                saveMistakes();
+            }
+        }
+
+        function removeFromMistakes(question) {
+            // 從錯題本移除
+            mistakes = mistakes.filter(m => m.q !== question.q);
+            saveMistakes();
+        }
+
+        function saveMistakes() {
+            localStorage.setItem('master_mistakes', JSON.stringify(mistakes));
+            updateMistakeCount();
+            // 可選：若有連線，同步到雲端
+            if (syncKey) {
+                db.collection("users").doc(syncKey).update({ mistakes: mistakes }).catch(e=>console.log("Mistake sync skipped"));
+            }
+        }
+
+        function updateMistakeCount() {
+            document.getElementById('mistake-count').innerText = mistakes.length;
         }
 
         function nextQuestion() { currentIndex++; if (currentIndex < currentQuizData.length) showQuestion(); else showResult(); }
 
         function showResult() {
-            clearInterval(timerInterval); document.getElementById('quiz-screen').classList.add('hidden'); document.getElementById('result-screen').classList.remove('hidden');
+            clearInterval(timerInterval); 
+            document.getElementById('quiz-screen').classList.add('hidden'); 
+            document.getElementById('result-screen').classList.remove('hidden');
             document.getElementById('final-score').innerText = `${Math.round((score / currentQuizData.length) * 100)}%`;
             document.getElementById('final-time').innerText = `${Math.floor((Date.now() - startTime) / 1000)}s`;
+            
+            // 顯示是否有錯題加入
+            if (score < currentQuizData.length) {
+                document.getElementById('mistake-alert').classList.remove('hidden');
+            } else {
+                document.getElementById('mistake-alert').classList.add('hidden');
+            }
+
             const container = document.getElementById('review-container'); container.innerHTML = '';
             currentQuizData.forEach((q, i) => {
                 const isCorrect = userResponses[i] === q.ans;
